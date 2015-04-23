@@ -1,25 +1,50 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Net.Mime;
 
 namespace ExchangeInboxWatcher
 {
     class Program
     {
+        private const string ProgramName = "ExchangeInboxWatcher";
+
         static void Main(string[] args)
         {
-            var options = Options.Parse(args);
-            var emailStore = new ExchangeEmailStore(options.EmailAddress, options.AccountPassword, options.AccountDomain);
-            emailStore.AutoDiscover();
-            var lastRecievedDate = emailStore.GetLastEmailReceiveDate();
-            validateReceiveDate(lastRecievedDate, options, emailStore);
+            try
+            {
+                var options = Options.Parse(args);
+                var emailStore = new ExchangeEmailStore(options.EmailAddress, options.AccountPassword, options.AccountDomain);
+                emailStore.AutoDiscover();
+                var lastRecievedDate = emailStore.GetLastEmailReceiveDate();
+                validateReceiveDate(lastRecievedDate, options, emailStore);
+            }
+            catch (Exception ex)
+            {
+                if (!EventLog.SourceExists(ProgramName))
+                {
+                    EventLog.CreateEventSource(ProgramName, "Application");
+                }
+
+                EventLog.WriteEntry(ProgramName, ex.Message,
+                    EventLogEntryType.Error);             
+            }
         }
 
         private static void validateReceiveDate(DateTime lastRecievedDate, Options options, ExchangeEmailStore emailStore)
         {
-            var timespan = DateTime.Now - lastRecievedDate;
-            if (timespan.TotalMinutes > options.MaxIdleTimeMinutes)
+            if (lastRecievedDate == DateTime.MinValue)
             {
-                var messageBody = BuildAlertMessage(options, timespan, lastRecievedDate);
-                emailStore.SendEmail(options.AlertRecipient, messageBody, "Email Account Exceeded Maximum Idle Time");
+                emailStore.SendEmail(options.AlertRecipient, string.Format("The inbox for the account {0} is empty.", options.EmailAddress), 
+                    "Email Account Exceeded Maximum Idle Time");
+            }
+            else
+            {
+                var timespan = DateTime.Now - lastRecievedDate;
+                if (timespan.TotalMinutes > options.MaxIdleTimeMinutes)
+                {
+                    var messageBody = BuildAlertMessage(options, timespan, lastRecievedDate);
+                    emailStore.SendEmail(options.AlertRecipient, messageBody, "Email Account Exceeded Maximum Idle Time");
+                }
             }
         }
 

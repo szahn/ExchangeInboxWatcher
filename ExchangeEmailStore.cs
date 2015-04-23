@@ -29,6 +29,11 @@ namespace ExchangeInboxWatcher
         {
             var view = new ItemView(1);
             var items = service.FindItems(WellKnownFolderName.Inbox, view);
+            if (!items.Any())
+            {
+                return DateTime.MinValue;
+            }
+
             var emailItem = items.FirstOrDefault();
             var date = emailItem.DateTimeReceived;
             return date;
